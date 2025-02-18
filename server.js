@@ -15,7 +15,9 @@ const config = {
     user: process.env.CDATA_CONNECT_CLOUD_USER,
     password: process.env.CDATA_CONNECT_CLOUD_PAT,
     options: {
-        encrypt: true
+        encrypt: true,
+        connectTimeout: 30000,
+        requestTimeout: 60000
     }
 };
 
@@ -37,12 +39,37 @@ async function executeQuery(query) {
     }
 }
 
+async function executeParameterizedQuery(query, parameters) {
+    let pool;
+    try {
+        console.error('Executing parameterized query:', query, parameters);
+        pool = await sql.connect(config);
+        const request = pool.request();
+        
+        // Add parameters to the request
+        Object.entries(parameters).forEach(([key, value]) => {
+            request.input(key, value);
+        });
+        
+        const result = await request.query(query);
+        console.error('Query result:', result);
+        return result.recordset;
+    } catch (err) {
+        console.error('SQL execution error:', err);
+        throw err;
+    } finally {
+        if (pool) {
+            await pool.close();
+        }
+    }
+}
+
 class CDataMCPServer {
     constructor() {
         this.server = new Server(
             {
                 name: 'cdata-mcp-server',
-                version: '0.0.1',
+                version: '0.0.2',
             },
             {
                 capabilities: {
@@ -58,6 +85,26 @@ class CDataMCPServer {
                                     },
                                 },
                                 required: ['query'],
+                            },
+                        },
+                        list_tables: {
+                            description: 'List available tables in CData Connect Cloud',
+                            inputSchema: {
+                                type: 'object',
+                                properties: {
+                                    catalogName: {
+                                        type: 'string',
+                                        description: 'Filter by catalog name',
+                                    },
+                                    schemaName: {
+                                        type: 'string',
+                                        description: 'Filter by schema name',
+                                    },
+                                    tableName: {
+                                        type: 'string',
+                                        description: 'Filter by table name',
+                                    },
+                                },
                             },
                         },
                     },
@@ -86,7 +133,6 @@ class CDataMCPServer {
     }
 
     setupRequestHandlers() {
-        // Get list of tools
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
             tools: [
                 {
@@ -101,6 +147,27 @@ class CDataMCPServer {
                             },
                         },
                         required: ['query'],
+                    },
+                },
+                {
+                    name: 'list_tables',
+                    description: 'List available tables in CData Connect Cloud',
+                    inputSchema: {
+                        type: 'object',
+                        properties: {
+                            catalogName: {
+                                type: 'string',
+                                description: 'Filter by catalog name',
+                            },
+                            schemaName: {
+                                type: 'string',
+                                description: 'Filter by schema name',
+                            },
+                            tableName: {
+                                type: 'string',
+                                description: 'Filter by table name',
+                            },
+                        },
                     },
                 },
             ],
@@ -123,6 +190,31 @@ class CDataMCPServer {
 
         if (name === 'execute_query') {
             return executeQuery(args.query);
+        }
+
+        if (name === 'list_tables') {
+            let query = 'SELECT * FROM INFORMATION_SCHEMA.TABLES';
+            const conditions = [];
+            const parameters = {};
+
+            if (args.catalogName) {
+                conditions.push("TABLE_CATALOG = @catalogName");
+                parameters.catalogName = args.catalogName;
+            }
+            if (args.schemaName) {
+                conditions.push("TABLE_SCHEMA = @schemaName");
+                parameters.schemaName = args.schemaName;
+            }
+            if (args.tableName) {
+                conditions.push("TABLE_NAME = @tableName");
+                parameters.tableName = args.tableName;
+            }
+
+            if (conditions.length > 0) {
+                query += ' WHERE ' + conditions.join(' AND ');
+            }
+
+            return executeParameterizedQuery(query, parameters);
         }
 
         throw new McpError(
