@@ -1,3 +1,5 @@
+# !!【お願い】!!  [CData社](https://www.cdata.com/jp/) が Official で出している 「 [CData Connect Cloud](https://www.cdata.com/jp/cloud/) 」に対応したMCP サーバー( [Connect Cloud MCP Server](https://github.com/CDataSoftware/connectcloud-mcp-server) ) の OSS実装がありますので [そちら](https://github.com/CDataSoftware/connectcloud-mcp-server) [https://github.com/CDataSoftware/connectcloud-mcp-server](https://github.com/CDataSoftware/connectcloud-mcp-server) を使用してください！
+
 # MCP server for CData Connect Cloud サンプル
 
 ## 使い方
